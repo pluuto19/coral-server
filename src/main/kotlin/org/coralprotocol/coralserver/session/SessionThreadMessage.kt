@@ -78,8 +78,7 @@ sealed interface SessionThreadMessagePart {
 }
 
 /**
- * The content of an embedded resource -- either inline text or base64-encoded binary, each carrying the
- * resource's [uri] and optional [mimeType]. Mirrors MCP's own `TextResourceContents`/`BlobResourceContents`.
+ * Content of an embedded resource: inline text or base64 binary, each with a [uri] and optional [mimeType].
  */
 @Serializable
 @JsonClassDiscriminator("type")

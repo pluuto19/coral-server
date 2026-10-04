@@ -18,17 +18,9 @@ import org.koin.test.inject
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * `send_message`'s `content` field was widened from a plain `String` to a sealed
- * `List<SessionThreadMessagePart>` (text, image, audio, embedded_resource, resource_link) so that MCP, ACP and A2A
- * clients can exchange rich content (see SessionThreadMessage.kt).
- *
- * [PuppetApiTest] only ever sends a [SessionThreadMessagePart.Text] part through this REST route. The REST Puppet
- * API (`routes/api/v1/PuppetApi.kt`) decodes/encodes `SendMessageInput`/`SendMessageOutput` via Ktor's
- * `ContentNegotiation` plugin (see `install(ContentNegotiation) { json(json, ...) }` in
- * `modules/ktor/CoralServerModule.kt`), which is a wholly independent (de)serialization path from the MCP tool's
- * own JSON handling of the very same `SessionThreadMessagePart` sealed hierarchy. No test anywhere in the repo
- * exercises the four non-text content kinds through that REST path -- this file closes that gap by round-tripping
- * all five kinds (including both [ResourceContents] variants) through the real HTTP boundary.
+ * PuppetApiTest only sends a Text part through this REST route, a JSON path independent
+ * of the MCP tool's own handling of the same type. This round trips all five kinds
+ * through the real HTTP boundary instead.
  */
 class PuppetApiRichContentTest : CoralTest({
     val agent1Name = "puppet1"
@@ -87,9 +79,8 @@ class PuppetApiRichContentTest : CoralTest({
             val threadId = createThreadResponse.thread.id
             val thread = session.getThreadById(threadId)
 
-            // Exercise every non-text SessionThreadMessagePart kind (plus text, for a realistic mixed message)
-            // through the REST route's Ktor ContentNegotiation (de)serialization -- a path independent of the MCP
-            // tool's own JSON handling of this same sealed type.
+            // Every content kind plus text, through the REST route's own JSON handling,
+            // independent of the MCP tool's handling of the same type.
             val sentContent = listOf(
                 SessionThreadMessagePart.Text("hello"),
                 SessionThreadMessagePart.Image(data = "aGVsbG8taW1hZ2U=", mimeType = "image/png"),
@@ -115,8 +106,7 @@ class PuppetApiRichContentTest : CoralTest({
                     title = "A linked thing",
                     description = "Exercises every optional field of ResourceLink"
                 ),
-                // optional fields omitted entirely -- probes explicitNulls=false round-tripping correctly back to
-                // null rather than e.g. an empty string or a dropped field causing a decode failure
+                // optional fields omitted entirely, to confirm they decode back to null
                 SessionThreadMessagePart.ResourceLink(
                     uri = "resource://thing/bare-link",
                     name = "bare-linked-thing"

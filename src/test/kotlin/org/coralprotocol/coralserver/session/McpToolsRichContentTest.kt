@@ -19,17 +19,9 @@ import org.koin.test.inject
 import java.util.*
 
 /**
- * [McpToolsTest] exercises `send_message`/`wait_for_message` end-to-end over real MCP transports (SSE and
- * Streamable HTTP), but only ever with a single [SessionThreadMessagePart.Text] part. That leaves every other
- * [SessionThreadMessagePart] variant -- and multi-part messages in general -- completely unexercised across a
- * real JSON-RPC serialize -> network transport -> deserialize round trip (both the immediate `send_message`
- * response, and the independent `wait_for_message` round trip to a second real client).
- *
- * This file closes that gap: it sends one message containing every [SessionThreadMessagePart] variant (including
- * both [ResourceContents] shapes nested inside an [SessionThreadMessagePart.EmbeddedResource], and two
- * differently-shaped [SessionThreadMessagePart.ResourceLink]s -- one with every optional field populated, one
- * with every optional field left at its null default) and asserts that every field of every part survives
- * two independent real transport round trips unchanged, in order, for both transports this repo supports.
+ * McpToolsTest only sends a single Text part over real MCP transports. This proves every
+ * SessionThreadMessagePart variant, plus a multi-part message, survives a real send and
+ * receive round trip over both SSE and Streamable HTTP.
  */
 class McpToolsRichContentTest : CoralTest({
     suspend fun testRichContent(
@@ -46,9 +38,8 @@ class McpToolsRichContentTest : CoralTest({
         val agent1Name = "agent1"
         val agent2Name = "agent2"
 
-        // Covers all five SessionThreadMessagePart variants, both ResourceContents variants nested inside
-        // EmbeddedResource, and both a fully-populated and a fully-null-optional-field ResourceLink -- in a
-        // single ordered, multi-part message.
+        // One message covering all five variants, both ResourceContents shapes, and both
+        // a fully populated and a fully default ResourceLink.
         val richContent = listOf(
             SessionThreadMessagePart.Text(
                 text = "rich-text-${UUID.randomUUID()}"
@@ -134,11 +125,8 @@ class McpToolsRichContentTest : CoralTest({
 
                                 val message = waitResult.message.shouldNotBeNull()
 
-                                // Round trip #2: independent of round trip #1 above, this is a *second* real MCP
-                                // client (agent2's own transport connection) receiving the already-persisted
-                                // message via wait_for_message -- proving the rich content survives storage and
-                                // a fresh encode/decode cycle to a different receiver, not just an echo of what
-                                // the sender itself just encoded.
+                                // A second, independent client receives the stored message via
+                                // wait_for_message, proving a fresh decode, not just an echo.
                                 message.content shouldBe richContent
                                 message.senderName shouldBe agent1Name
                             })

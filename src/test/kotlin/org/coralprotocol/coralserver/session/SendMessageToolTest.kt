@@ -28,15 +28,9 @@ import org.koin.test.inject
 import java.util.*
 
 /**
- * Focused, contract-first tests for the rich-content `send_message` MCP tool (`SendMessageInput`/
- * `SendMessageOutput`/`sendMessageExecutor` in `SendMessageTool.kt`), covering GitHub issue #160: `send_message`
- * must accept all five MCP/ACP/A2A-converged content kinds (text, image, audio, embedded resource, resource
- * link), must group multiple parts sent in one call into a single delivered message (not split across
- * deliveries), and must round-trip every kind's fields exactly through `send_message` -> `wait_for_message`.
- *
- * Every content value below is built through the real tool call path -- `McpTool.executeOn` (or, for
- * malformed-input probes, a hand-built raw `CallToolRequest`) -- which serializes to real JSON and back through
- * the real MCP client/server boundary, not just in-memory Kotlin object construction.
+ * Contract tests for send_message covering issue #160: it must accept all five content
+ * kinds, group multiple parts into one message, and round trip every field through the
+ * real tool call path, not just in-memory object construction.
  */
 class SendMessageToolTest : CoralTest({
     suspend fun sendMessageRaw(
@@ -112,8 +106,8 @@ class SendMessageToolTest : CoralTest({
                                 )
                                 val message = result.message.shouldNotBeNull()
 
-                                // the two parts must arrive together, in the order they were sent, as ONE message --
-                                // not truncated to a single part and not split into two separate messages
+                                // the two parts must arrive together, in order, as ONE message,
+                                // not truncated or split into two
                                 message.content shouldBe listOf(
                                     SessionThreadMessagePart.Text(textValue),
                                     SessionThreadMessagePart.Image(imageData, imageMimeType)
@@ -354,7 +348,7 @@ class SendMessageToolTest : CoralTest({
                                         addJsonObject {
                                             put("type", "resource_link")
                                             put("name", "a link with no uri")
-                                            // "uri" deliberately omitted -- it is a required, non-nullable field
+                                            // "uri" deliberately omitted, it is required
                                         }
                                     }
                                     putJsonArray("mentions") {}
@@ -445,7 +439,7 @@ class SendMessageToolTest : CoralTest({
                                         addJsonObject {
                                             put("type", "image")
                                             put("mimeType", "image/png")
-                                            // "data" deliberately omitted -- it is a required, non-nullable field
+                                            // "data" deliberately omitted, it is required
                                         }
                                     }
                                     putJsonArray("mentions") {}

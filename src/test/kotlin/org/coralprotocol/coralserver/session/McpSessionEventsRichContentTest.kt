@@ -37,23 +37,9 @@ import org.koin.test.inject
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Closes a real coverage gap left by commit 99cb6cb4 ("refactor: support rich content in send_message").
- *
- * [McpSessionEventsTest] proves that a *single* [SessionThreadMessagePart.Text] part survives the trip from
- * `send_message` out through a [SessionEvent.ThreadMessageSent] event -- but it (like every other
- * `SessionThreadMessagePart`-touching test in this repository, confirmed by a full-repo grep) only ever subscribes
- * to [LocalSession.events] in-process. It never drives the event through the real wire-format encode/decode path
- * ([org.coralprotocol.coralserver.util.toWsFrame] / [org.coralprotocol.coralserver.util.fromWsFrame]) that every
- * real WebSocket subscriber of `/ws/v1/events/...` actually depends on. [WebSocketEventTest] *does* exercise that
- * real path, but only ever asserts `it is SessionEvent.ThreadMessageSent` -- never a single field of the carried
- * message -- and its only message producer (the seed agent) only ever emits [SessionThreadMessagePart.Text].
- *
- * So nowhere in the repository is a [SessionEvent.ThreadMessageSent] carrying more than one content part, or any
- * non-[SessionThreadMessagePart.Text] kind, ever actually encoded to JSON and decoded back on the other end of a
- * real WebSocket. This test sends one message containing every [SessionThreadMessagePart] kind (including both
- * [ResourceContents] sub-kinds, and both a fully-populated and an all-defaults [SessionThreadMessagePart.ResourceLink])
- * through the real `send_message` HTTP surface (the puppet API), receives the resulting event over a real
- * WebSocket connection, and asserts every field of every content part round-trips exactly.
+ * No existing test drives a ThreadMessageSent event through the real WebSocket wire
+ * format with more than one Text part. This sends a message with every content kind,
+ * receives it over a real WebSocket connection, and checks every field round trips.
  */
 class McpSessionEventsRichContentTest : CoralTest({
     test("testThreadMessageSentRichContentRoundTripsOverRealWebSocket").config(invocationTimeout = 15.seconds) {
@@ -66,9 +52,8 @@ class McpSessionEventsRichContentTest : CoralTest({
         val agentName = "puppet1"
         val threadName = "rich content thread"
 
-        // Every SessionThreadMessagePart kind, both ResourceContents sub-kinds, and a ResourceLink exercised both
-        // with every optional field populated and with every optional field left at its null default -- this is
-        // the shape no existing test anywhere in the repo sends through the real event-serialization path.
+        // Every content kind, both ResourceContents shapes, and a ResourceLink tried both
+        // fully populated and fully default.
         val richContent = listOf(
             SessionThreadMessagePart.Text("hello from the rich content test"),
             SessionThreadMessagePart.Image(data = "aGVsbG8gaW1hZ2U=", mimeType = "image/png"),

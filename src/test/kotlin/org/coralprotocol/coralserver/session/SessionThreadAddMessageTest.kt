@@ -29,10 +29,8 @@ private fun LoggingEvent.textOrNull(): String = when (this) {
 }
 
 /**
- * Asserts that [canary] never appears in any log line captured by this logger so far. Used to prove that
- * [SessionThread.addMessage] (both the success path and the paths that reject a message before storing it) never
- * leaks raw message content into logs -- see commit 99cb6cb4, which removed `"sent message \"${message}\" ..."`
- * from the success-path log line specifically to stop content from being logged.
+ * Asserts [canary] never appears in any captured log line, to prove addMessage never
+ * leaks raw message content into logs on any path.
  */
 private fun Logger.assertNeverLogged(canary: String) {
     flow.replayCache.map { it.textOrNull() }.filter { canary in it }.shouldBeEmpty()
@@ -52,10 +50,8 @@ private fun Logger.assertNeverLogged(canary: String) {
  * Each is exercised below with both a populated, multi-shape `content` list and an empty one, to prove none of
  * these checks have become coupled to the size or shape of `content` now that it is a list instead of a string.
  *
- * Note: whether an *accepted* (non-exceptional) `addMessage` call should itself reject an empty `content` list is
- * NOT tested here -- neither GitHub issue #160 nor the approved implementation plan specifies required behavior for
- * that case, so asserting either outcome would encode current implementation behavior as the oracle rather than a
- * written requirement. See the testing review report for this file for that gap.
+ * Note: whether an accepted addMessage call should reject an empty content list is not
+ * tested here. Neither issue #160 nor the approved plan specifies that behavior.
  */
 class SessionThreadAddMessageTest : CoralTest({
     test("addMessage rejects a message into a closed thread regardless of content shape") {
@@ -215,8 +211,8 @@ class SessionThreadAddMessageTest : CoralTest({
         val returned = thread.addMessage(richContent, agent1, setOf(agent2))
         returned.content shouldContainExactly richContent
 
-        // re-read the durably stored message (not the returned reference) to prove storage itself -- not just the
-        // return value -- preserves every part exactly
+        // re-read the stored message, not the returned reference, to prove storage itself
+        // preserves every part exactly
         val stored = thread.withMessageLock { messages -> messages.single() }
         stored.content shouldContainExactly richContent
         stored.id shouldBe returned.id
@@ -251,7 +247,7 @@ class SessionThreadAddMessageTest : CoralTest({
         // would also embed it) must fail this assertion.
         sessionLogger.assertNeverLogged(canary)
 
-        // the send itself must still be observable in the logs -- this isn't a silent no-op, just a redacted one
+        // the send must still be observable in the logs, just without the raw content
         sessionLogger.flow.replayCache
             .filterIsInstance<LoggingEvent.Info>()
             .shouldExist { it.text.contains("(id=${msg.id})") && it.text.contains("into thread ${thread.id}") }

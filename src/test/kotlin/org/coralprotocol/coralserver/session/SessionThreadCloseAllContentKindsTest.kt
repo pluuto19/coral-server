@@ -16,12 +16,9 @@ import org.koin.test.inject
  * no carve-out by content kind, and the sealed [SessionThreadMessagePart] hierarchy is designed so every variant is
  * interchangeable wherever the interface is expected (see the rich-content plan's OOP/Liskov rationale).
  *
- * This test re-exercises that same close-then-assert-empty contract, but with one message per non-[Text][SessionThreadMessagePart.Text]
- * content kind, plus a message mixing several kinds together. It would fail against a plausible wrong
- * implementation that accidentally scopes deletion to text content only -- for example by reusing the
- * `content.filterIsInstance<SessionThreadMessagePart.Text>()` pattern that [SessionThreadMessage.asJsonState] uses
- * (for an unrelated, deliberately text-only summary view) in the deletion path instead of an unconditional clear.
- * Such a mutant would still pass every existing test in this package, since none of them ever send non-text
+ * This re-checks close-then-assert-empty, but with one message per content kind plus a
+ * mixed message. It would fail against a wrong implementation that scopes deletion to
+ * text content only, which no existing test in this package would catch.
  * content.
  */
 class SessionThreadCloseAllContentKindsTest : CoralTest({

@@ -25,22 +25,9 @@ import org.koin.test.inject
 import java.util.*
 
 /**
- * Adversarial coverage for a gap left by the `send_message` rich-content refactor (coral-server#160):
- * [McpResourceTest] exercises the `coral://state` resource but only ever asserts on `threadName` fields --
- * nothing in this repository's test suite asserted on the `messageText` field that
- * [SessionThreadMessage.asJsonState] derives by summarizing *only* the [SessionThreadMessagePart.Text] parts
- * of a message's content (a first-time-exercised behavior change; see
- * `session/SessionThreadMessage.kt`'s `asJsonState` doc comment).
- *
- * This proves, through the same public `coral://state` resource boundary [McpResourceTest] uses:
- *   1. `messageText` is populated with a plain-text message's exact text (should fail if the field is
- *      dropped, renamed, or mis-populated).
- *   2. Multiple `Text` parts are joined in order with `\n` (should fail if parts are dropped, reordered, or
- *      joined with the wrong separator).
- *   3. A message mixing `Text` and non-text content still renders `messageText` as just the text, with no
- *      raw non-text payload leaking into the resource (should fail on a privacy/content leak).
- *   4. A message with no `Text` parts at all does not crash the resource read and renders an empty summary
- *      rather than substituting something else (should fail on a crash or a silent wrong substitution).
+ * McpResourceTest never asserts on the messageText field in coral://state. This checks
+ * it is populated correctly for single, multiple, and mixed content, and never leaks
+ * non-text payload data.
  */
 class McpResourceMessageContentTest : CoralTest({
     suspend fun Client.readStateResource(): String {
@@ -78,7 +65,7 @@ class McpResourceMessageContentTest : CoralTest({
                                         CreateThreadInput("content thread", listOf())
                                     ).thread
 
-                                    // 1. plain text message -- messageText must carry the exact text sent
+                                    // 1. plain text message, messageText must carry the exact text sent
                                     mcpToolManager.sendMessageTool.executeOn(
                                         client,
                                         SendMessageInput(

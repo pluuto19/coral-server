@@ -21,30 +21,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.time.ExperimentalTime
 
 /**
- * Contract/schema tests for [SessionThreadMessagePart] and [ResourceContents] -- the typed content model
- * introduced by "refactor: support rich content in send_message" (coral-server issue #160).
- *
- * Oracle sources used to derive the required shape BEFORE this file's implementation was inspected line by
- * line:
- *  - Issue #160's literal text: "send_message should allow embedded and/or linked resources/artifacts as
- *    per A2A and ACP", linking A2A's FilePart and ACP's content spec.
- *  - The approved implementation plan (lexical-floating-marble.md), which resolves that into five content
- *    kinds -- Text(text); Image(mimeType, data) / Audio(mimeType, data), both base64, both fields required;
- *    EmbeddedResource wrapping a Text-or-Blob ResourceContents; ResourceLink(uri, name required;
- *    mimeType/title/description optional, default null) -- plus ResourceContents(Text(text, mimeType?) /
- *    Blob(blob, mimeType?)).
- *  - This repo's own pre-existing serialization convention in this exact file (`SessionThreadMessageFilter`)
- *    and CLAUDE.md: every sealed type crossing a boundary is `@Serializable` with
- *    `@JsonClassDiscriminator("type")`.
- *
- * Finding (recorded, not fixed): the shipped `EmbeddedResource`/`ResourceContents` shape diverges from the
- * plan's literal sketch. The plan wrote `EmbeddedResource(uri: String, contents: ResourceContents)` with
- * `uri` living directly on `EmbeddedResource`. The shipped type instead has `EmbeddedResource(resource:
- * ResourceContents)` with `uri` (required) and `mimeType` (optional) promoted onto `ResourceContents`
- * itself. This matches real MCP `TextResourceContents`/`BlobResourceContents` more closely than the plan's
- * own sketch did, but it is an uncommunicated deviation from the written, approved plan (the plan's "open
- * items" section flags the `data` field name as unverified, but never flags this `uri` placement). Tests
- * below pin the shape that actually shipped so a further silent change either direction is caught.
+ * Contract tests for SessionThreadMessagePart and ResourceContents, derived from issue
+ * #160 and the approved plan before reading the implementation. Note: uri and mimeType
+ * live on ResourceContents in the shipped code, not on EmbeddedResource as the plan sketched.
  */
 private val wireJson = Json {
     // Mirrors the production Json bean (Main.kt) exactly, since that is what actually governs the wire
@@ -88,12 +67,8 @@ private val adversarialStrings = listOf(
 
 class SessionThreadMessagePartContractTest : FunSpec({
 
-    // ---------------------------------------------------------------------------------------------------
-    // Section A: JSON round-trip preserves every field exactly, for all five content kinds and both
-    // ResourceContents variants. Falsification target (a): a plausible wrong implementation drops a field,
-    // swaps a default, or corrupts data during (de)serialization while still "looking" correct on the
-    // happy path.
-    // ---------------------------------------------------------------------------------------------------
+    // Section A: JSON round-trip preserves every field, for all content kinds and both
+    // ResourceContents variants.
 
     test("Text round-trips exactly for arbitrary text (property)") {
         checkAll(Arb.string(0, 200)) { text ->
@@ -164,9 +139,8 @@ class SessionThreadMessagePartContractTest : FunSpec({
         roundTripParts(listOf(part)) shouldBe listOf(part)
 
         val encoded = wireJson.encodeToJsonElement(partSerializer, part).jsonObject
-        // explicitNulls = false (matches production Json): absent optional fields must not appear at all,
-        // not appear as JSON null -- a wrong impl could use encodeDefaults-only semantics and emit
-        // "mimeType": null instead of omitting the key.
+        // explicitNulls = false, matching production: an absent optional field must be
+        // omitted entirely, not encoded as a JSON null.
         encoded.containsKey("mimeType") shouldBe false
         encoded.containsKey("title") shouldBe false
         encoded.containsKey("description") shouldBe false
@@ -208,11 +182,8 @@ class SessionThreadMessagePartContractTest : FunSpec({
         (result as ResourceContents.Blob).blob.length shouldBe 1_000_000
     }
 
-    // ---------------------------------------------------------------------------------------------------
-    // Section B: polymorphic discriminator contract. Falsification target (b): the discriminator is
-    // inconsistent/colliding across kinds, or an unrecognized/missing discriminator or required field
-    // crashes unpredictably instead of failing closed with a catchable, documented exception type.
-    // ---------------------------------------------------------------------------------------------------
+    // Section B: the discriminator must be distinct per kind, and a missing or unknown
+    // one must fail closed with a catchable exception, not crash unpredictably.
 
     test("every SessionThreadMessagePart kind encodes a non-blank 'type' discriminator") {
         val samples = listOf(
@@ -344,11 +315,8 @@ class SessionThreadMessagePartContractTest : FunSpec({
             wireJson.decodeFromString(partSerializer, encoded)
     }
 
-    // ---------------------------------------------------------------------------------------------------
-    // Section C: asJsonState()'s content -> messageText projection. Falsification target (c): the summary
-    // either leaks non-text payload data into the lightweight state view, or silently drops legitimate text
-    // when it's mixed with other content kinds (instead of extracting exactly the Text parts, in order).
-    // ---------------------------------------------------------------------------------------------------
+    // Section C: asJsonState's messageText summary must include every Text part in order
+    // and never leak non-text payload data.
 
     test("a single Text part becomes messageText verbatim") {
         val message = minimalMessage(listOf(SessionThreadMessagePart.Text("hello world")))
@@ -453,9 +421,7 @@ class SessionThreadMessagePartContractTest : FunSpec({
         state.containsKey("mentionAgentNames") shouldBe false
     }
 
-    // ---------------------------------------------------------------------------------------------------
     // Section D: field-shape pinning and documented gaps.
-    // ---------------------------------------------------------------------------------------------------
 
     test("EmbeddedResource's own JSON object carries no top-level 'uri' or 'contents' key") {
         // Pins the deviation from the written plan recorded above: 'uri' lives on the nested

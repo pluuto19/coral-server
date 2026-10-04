@@ -22,13 +22,8 @@ import kotlin.time.Duration.Companion.seconds
  * Focused coverage for the `EchoDebugAgent` change in commit 99cb6cb4 (coral-server issue #160): the agent's
  * reply now must be constructed as `listOf(SessionThreadMessagePart.Text(...))` instead of a bare `String`.
  *
- * `DebugAgentsTest.testEchoDebugAgent` already proves the echo agent produces the right *number* of replies,
- * but never inspects the *shape* of a reply's `content`. That leaves a real gap introduced by this exact
- * refactor: a build that regressed to an empty content list, the wrong `SessionThreadMessagePart` variant
- * (e.g. an image/resource-link part instead of text), or more than one part per reply would still satisfy
- * the existing count-only assertions. This test closes that gap without asserting on the literal reply
- * string ("nice message!" is an implementation-chosen debug fixture detail, not a documented contract) --
- * only on the documented contract that the echo agent "echoes messages" back wrapped in text content.
+ * DebugAgentsTest only checks reply count, not shape. This proves each reply is exactly one
+ * Text part, without asserting the literal reply string since that is not a documented contract.
  */
 class EchoDebugAgentContentTest : CoralTest({
     test("testEchoDebugAgentWrapsRepliesAsSingleTextPart").config(invocationTimeout = 30.seconds) {
@@ -67,8 +62,7 @@ class EchoDebugAgentContentTest : CoralTest({
             thread.withMessageLock { messages ->
                 val echoMessages = messages.filter { it.senderName == "echo" }
 
-                // sanity: echo actually replied the expected number of times (shape of the scenario, not the
-                // specific focus of this test -- DebugAgentsTest already covers this exhaustively)
+                // sanity check only, DebugAgentsTest already covers reply count
                 echoMessages.shouldHaveSize(messageCount.toInt())
 
                 // the actual focus: every echoed reply must be wrapped as exactly one non-blank text part,

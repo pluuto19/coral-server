@@ -15,13 +15,9 @@ import org.koin.test.inject
  * `send_message`'s content moved from a plain `String` to `List<SessionThreadMessagePart>` (coral-server
  * issue #160).
  *
- * [SessionAgent.sendMessage] itself does nothing to [SessionThreadMessagePart] values beyond forwarding the
- * list verbatim to [SessionThread.addMessage]. `SessionTest.testMessages`/`testMentions`/`testMessageReplay`
- * already exercise this exact function with the new signature, but only ever with single-element,
- * `Text`-only lists -- which cannot distinguish a correct pass-through from a plausible wrong
- * implementation that truncates the list to one element, filters out non-`Text` variants (an easy slip,
- * since `SessionThreadMessage.asJsonState()` elsewhere in this same file legitimately does filter to `Text`
- * parts for an unrelated purpose), reorders parts, or silently deduplicates equal elements.
+ * sendMessage just forwards content to addMessage. Existing tests only use single-element
+ * Text lists, which cannot catch a wrong implementation that truncates, filters, reorders,
+ * or deduplicates parts.
  *
  * These tests close that gap by round-tripping a heterogeneous, multi-element, order-and-duplicate-bearing
  * list through the real [SessionAgent.sendMessage] entry point and asserting full structural equality on
